@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
-import { CartItem } from "@/lib/types";
+import { quoteCart } from "@/lib/backend/quote";
+import { appendRecord } from "@/lib/backend/store";
+import { isValidEmail } from "@/lib/backend/validation";
+import { CheckoutItemInput } from "@/lib/types";
 
 type CheckoutRequest = {
   customer?: {
@@ -10,12 +13,7 @@ type CheckoutRequest = {
     city?: string;
     notes?: string;
   };
-  items?: CartItem[];
-  totals?: {
-    subtotal?: number;
-    shipping?: number;
-    total?: number;
-  };
+  items?: CheckoutItemInput[];
 };
 
 function badRequest(message: string) {
@@ -36,22 +34,40 @@ export async function POST(req: Request) {
     }
   }
 
-  if (!payload.items || payload.items.length === 0) {
-    return badRequest("Your cart is empty.");
+  if (!isValidEmail(payload.customer.email ?? "")) {
+    return badRequest("Please provide a valid email address.");
   }
 
-  for (const item of payload.items) {
-    if (!item.productId || item.quantity < 1 || item.price < 1) {
-      return badRequest("Invalid cart item payload.");
-    }
-    if (item.personalization && item.personalization.length > 12) {
-      return badRequest("Personalization must be 12 characters or less.");
-    }
+  let quote;
+  try {
+    quote = quoteCart(payload.items ?? []);
+  } catch (error) {
+    return badRequest(error instanceof Error ? error.message : "Invalid checkout payload.");
   }
 
   const orderNumber = `ITM-${Date.now().toString().slice(-8)}`;
+  await appendRecord("orders", {
+    orderNumber,
+    status: "confirmed",
+    createdAt: new Date().toISOString(),
+    customer: {
+      fullName: payload.customer.fullName?.trim(),
+      email: payload.customer.email?.trim(),
+      phone: payload.customer.phone?.trim(),
+      address: payload.customer.address?.trim(),
+      city: payload.customer.city?.trim(),
+      notes: payload.customer.notes?.trim() || undefined
+    },
+    quote
+  });
+
   return NextResponse.json({
     orderNumber,
-    status: "confirmed"
+    status: "confirmed",
+    totals: {
+      subtotal: quote.subtotal,
+      shipping: quote.shipping,
+      total: quote.total
+    }
   });
 }

@@ -17,7 +17,12 @@ export function readCart(): CartItem[] {
     if (!Array.isArray(parsed)) {
       return [];
     }
-    return parsed.filter((item) => Boolean(item.productId && item.quantity > 0));
+    return parsed
+      .filter((item) => Boolean(item.productId && item.quantity > 0))
+      .map((item) => ({
+        ...item,
+        size: item.size && item.size.trim().length > 0 ? item.size : "One Size"
+      }));
   } catch {
     return [];
   }

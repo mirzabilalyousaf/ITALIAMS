@@ -1,9 +1,9 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
-import { cartSubtotal, readCart, writeCart } from "@/lib/cart-storage";
-import { CartItem } from "@/lib/types";
+import { readCart, writeCart } from "@/lib/cart-storage";
+import { CartItem, CartQuote } from "@/lib/types";
 
 function formatPrice(value: number) {
   return new Intl.NumberFormat("en-PK", {
@@ -16,20 +16,57 @@ function formatPrice(value: number) {
 type CheckoutResponse = {
   orderNumber: string;
   status: string;
+  totals: {
+    subtotal: number;
+    shipping: number;
+    total: number;
+  };
 };
 
 export function CheckoutClient() {
   const [items, setItems] = useState<CartItem[]>([]);
+  const [quote, setQuote] = useState<CartQuote | null>(null);
   const [state, setState] = useState<"idle" | "submitting" | "success" | "error">("idle");
+  const [quoteState, setQuoteState] = useState<"idle" | "loading" | "error">("idle");
   const [message, setMessage] = useState("");
 
   useEffect(() => {
     setItems(readCart());
   }, []);
 
-  const subtotal = useMemo(() => cartSubtotal(items), [items]);
-  const shipping = items.length > 0 ? 450 : 0;
-  const total = subtotal + shipping;
+  useEffect(() => {
+    const loadQuote = async () => {
+      if (items.length === 0) {
+        setQuote(null);
+        return;
+      }
+      setQuoteState("loading");
+      const response = await fetch("/api/cart/quote", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items: items.map((item) => ({
+            productId: item.productId,
+            size: item.size,
+            quantity: item.quantity,
+            personalization: item.personalization
+          }))
+        })
+      });
+
+      if (!response.ok) {
+        setQuoteState("error");
+        setMessage("Unable to refresh pricing right now.");
+        return;
+      }
+
+      const nextQuote = (await response.json()) as CartQuote;
+      setQuote(nextQuote);
+      setQuoteState("idle");
+    };
+
+    void loadQuote();
+  }, [items]);
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -46,8 +83,12 @@ export function CheckoutClient() {
         city: String(form.get("city") ?? "").trim(),
         notes: String(form.get("notes") ?? "").trim()
       },
-      items,
-      totals: { subtotal, shipping, total }
+      items: items.map((item) => ({
+        productId: item.productId,
+        size: item.size,
+        quantity: item.quantity,
+        personalization: item.personalization
+      }))
     };
 
     const response = await fetch("/api/checkout", {
@@ -67,7 +108,10 @@ export function CheckoutClient() {
     writeCart([]);
     setItems([]);
     setState("success");
-    setMessage(`Order ${data.orderNumber} placed. Our concierge will contact you shortly.`);
+    setQuote(null);
+    setMessage(
+      `Order ${data.orderNumber} placed. Total ${formatPrice(data.totals.total)}. Our concierge will contact you shortly.`
+    );
   };
 
   if (items.length === 0 && state !== "success") {
@@ -115,7 +159,11 @@ export function CheckoutClient() {
               <textarea name="notes" rows={4} />
             </label>
           </div>
-          <button disabled={state === "submitting"} className="btn" type="submit">
+          <button
+            disabled={state === "submitting" || quoteState === "loading" || !quote}
+            className="btn"
+            type="submit"
+          >
             {state === "submitting" ? "Processing..." : "Place order"}
           </button>
           {message ? <p className={state === "error" ? "error" : "notice"}>{message}</p> : null}
@@ -123,23 +171,24 @@ export function CheckoutClient() {
 
         <aside className="cart-summary reveal">
           <h2>Order summary</h2>
-          {items.map((item, idx) => (
-            <p key={`${item.productId}-${idx}`} className="summary-line">
+          {(quote?.lines ?? []).map((line, idx) => (
+            <p key={`${line.productId}-${idx}`} className="summary-line">
               <span>
-                {item.name} x{item.quantity}
-                {item.personalization ? ` (${item.personalization})` : ""}
+                {line.name} ({line.size}) x{line.quantity}
+                {line.personalization ? ` (${line.personalization})` : ""}
               </span>
-              <strong>{formatPrice(item.price * item.quantity)}</strong>
+              <strong>{formatPrice(line.lineTotal)}</strong>
             </p>
           ))}
+          {quoteState === "loading" ? <p className="muted">Refreshing secure pricing...</p> : null}
           <p>
-            Subtotal <strong>{formatPrice(subtotal)}</strong>
+            Subtotal <strong>{formatPrice(quote?.subtotal ?? 0)}</strong>
           </p>
           <p>
-            Shipping <strong>{formatPrice(shipping)}</strong>
+            Shipping <strong>{formatPrice(quote?.shipping ?? 0)}</strong>
           </p>
           <p className="total">
-            Total <strong>{formatPrice(total)}</strong>
+            Total <strong>{formatPrice(quote?.total ?? 0)}</strong>
           </p>
         </aside>
       </div>

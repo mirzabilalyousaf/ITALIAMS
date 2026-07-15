@@ -25,17 +25,18 @@ export function ProductDetailClient({ product }: { product: Product }) {
 
   const addItem = () => {
     const cart = readCart();
-    const variantId = `${product.id}:${size}`;
-    const key = `${variantId}-${personalizationValue}`;
+    const key = `${product.id}:${size}-${personalizationValue}`;
     const idx = cart.findIndex(
-      (item) => `${item.productId}-${item.personalization ?? ""}` === key
+      (item) =>
+        `${item.productId}:${item.size}-${item.personalization ?? ""}` === key
     );
 
     if (idx >= 0) {
       cart[idx].quantity += quantity;
     } else {
       cart.push({
-        productId: variantId,
+        productId: product.id,
+        size,
         slug: product.slug,
         name: `${product.name} (${size})`,
         image: product.image,

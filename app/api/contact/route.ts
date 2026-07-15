@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { appendRecord } from "@/lib/backend/store";
+import { isValidEmail } from "@/lib/backend/validation";
 
 type ContactRequest = {
   name?: string;
@@ -17,7 +19,7 @@ export async function POST(req: Request) {
     return badRequest("Please provide your name.");
   }
 
-  if (!payload.email || !payload.email.includes("@")) {
+  if (!payload.email || !isValidEmail(payload.email)) {
     return badRequest("Please provide a valid email address.");
   }
 
@@ -25,7 +27,17 @@ export async function POST(req: Request) {
     return badRequest("Please include a message with at least 10 characters.");
   }
 
+  const ticketId = `CNT-${Date.now().toString().slice(-8)}`;
+  await appendRecord("contact-inquiries", {
+    ticketId,
+    createdAt: new Date().toISOString(),
+    name: payload.name.trim(),
+    email: payload.email.trim(),
+    message: payload.message.trim()
+  });
+
   return NextResponse.json({
-    status: "received"
+    status: "received",
+    ticketId
   });
 }

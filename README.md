@@ -13,8 +13,10 @@ npm run dev
 
 - **Brand/contact/WhatsApp/offer deadline:** `lib/site-config.ts`
 - **Products/collections/blog/FAQ seed data:** `lib/data.ts`
-- **Checkout API alignment:** `app/api/checkout/route.ts`
-- **Contact API alignment:** `app/api/contact/route.ts`
+- **Backend quote/checkout logic:** `lib/backend/quote.ts`, `app/api/cart/quote/route.ts`, `app/api/checkout/route.ts`
+- **Backend contact handling:** `app/api/contact/route.ts`
+- **Product feed API:** `app/api/products/route.ts`
+- **Simple order/contact persistence:** `lib/backend/store.ts` (writes to `data/*.json`)
 
 ## Asset replacement
 

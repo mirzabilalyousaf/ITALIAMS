@@ -38,10 +38,36 @@ export type FaqItem = {
 
 export type CartItem = {
   productId: string;
+  size: string;
   slug: string;
   name: string;
   image: string;
   price: number;
   quantity: number;
   personalization?: string;
+};
+
+export type CheckoutItemInput = {
+  productId: string;
+  size: string;
+  quantity: number;
+  personalization?: string;
+};
+
+export type QuoteLine = {
+  productId: string;
+  size: string;
+  name: string;
+  image: string;
+  quantity: number;
+  unitPrice: number;
+  personalization?: string;
+  lineTotal: number;
+};
+
+export type CartQuote = {
+  lines: QuoteLine[];
+  subtotal: number;
+  shipping: number;
+  total: number;
 };

@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import { cartSubtotal, readCart, writeCart } from "@/lib/cart-storage";
-import { CartItem } from "@/lib/types";
+import { useEffect, useState } from "react";
+import { readCart, writeCart } from "@/lib/cart-storage";
+import { CartItem, CartQuote } from "@/lib/types";
 
 function formatPrice(value: number) {
   return new Intl.NumberFormat("en-PK", {
@@ -15,14 +15,50 @@ function formatPrice(value: number) {
 
 export function CartClient() {
   const [items, setItems] = useState<CartItem[]>([]);
+  const [quote, setQuote] = useState<CartQuote | null>(null);
+  const [quoteState, setQuoteState] = useState<"idle" | "loading" | "error">("idle");
+  const [error, setError] = useState("");
 
   useEffect(() => {
     setItems(readCart());
   }, []);
 
-  const subtotal = useMemo(() => cartSubtotal(items), [items]);
-  const shipping = items.length > 0 ? 450 : 0;
-  const total = subtotal + shipping;
+  useEffect(() => {
+    const loadQuote = async () => {
+      if (items.length === 0) {
+        setQuote(null);
+        return;
+      }
+
+      setQuoteState("loading");
+      setError("");
+      const response = await fetch("/api/cart/quote", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items: items.map((item) => ({
+            productId: item.productId,
+            size: item.size,
+            quantity: item.quantity,
+            personalization: item.personalization
+          }))
+        })
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        setQuoteState("error");
+        setError(errorText || "Unable to refresh cart pricing.");
+        return;
+      }
+
+      const nextQuote = (await response.json()) as CartQuote;
+      setQuote(nextQuote);
+      setQuoteState("idle");
+    };
+
+    void loadQuote();
+  }, [items]);
 
   const updateQty = (index: number, qty: number) => {
     const next = [...items];
@@ -61,6 +97,7 @@ export function CartClient() {
               <img src={item.image} alt={item.name} />
               <div>
                 <h3>{item.name}</h3>
+                <p className="muted">Size: {item.size}</p>
                 {item.personalization ? (
                   <p className="muted">Monogram: {item.personalization}</p>
                 ) : null}
@@ -85,14 +122,16 @@ export function CartClient() {
         </div>
         <aside className="cart-summary reveal">
           <h2>Order summary</h2>
+          {quoteState === "loading" ? <p className="muted">Refreshing secure pricing...</p> : null}
+          {error ? <p className="error">{error}</p> : null}
           <p>
-            Subtotal <strong>{formatPrice(subtotal)}</strong>
+            Subtotal <strong>{formatPrice(quote?.subtotal ?? 0)}</strong>
           </p>
           <p>
-            Shipping <strong>{formatPrice(shipping)}</strong>
+            Shipping <strong>{formatPrice(quote?.shipping ?? 0)}</strong>
           </p>
           <p className="total">
-            Total <strong>{formatPrice(total)}</strong>
+            Total <strong>{formatPrice(quote?.total ?? 0)}</strong>
           </p>
           <Link href="/checkout" className="btn">
             Proceed to checkout

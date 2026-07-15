@@ -32,8 +32,9 @@ export default function ContactPage() {
       return;
     }
 
+    const data = (await response.json()) as { ticketId: string };
     setStatus("success");
-    setMessage("Thank you. Our concierge team will respond shortly.");
+    setMessage(`Thank you. Ticket ${data.ticketId} has been received by our concierge team.`);
     event.currentTarget.reset();
   };
 
